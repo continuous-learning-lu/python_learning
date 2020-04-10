@@ -1,0 +1,37 @@
+h1 {
+    font-size: 30px;
+    color: red;
+    text-align: center;
+}
+
+p {
+    font-size: 28px;
+}
+
+comment {
+    font-size: 24px;
+    color: cadetblue;
+    margin: 10px auto;
+    margin-top: auto
+}
+div{
+    font-size: 26px;
+    color: red;
+    text-align: center;
+}
+
+img {
+    max-width: 98%;
+    margin: 6px auto;
+    height: auto;
+    border: 0;
+    outline: 0
+    -webkit-box-shadow: 1px 4px 12px 6px #5CA2BE;
+    -moz-box-shadow: 1px 4px 12px 6px #5CA2BE;
+    box-shadow: 1px 4px 12px 6px #5CA2BE;
+    /*set the images aligned*/
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 6px;
+}
