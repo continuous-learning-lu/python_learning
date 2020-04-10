@@ -1,4 +1,7 @@
 # coding:utf-8
+'''
+@description: 公众号的数据抓取
+'''
 
 import re
 import time
@@ -13,30 +16,44 @@ import PostgresUtils
 
 urllib3.disable_warnings()
 
-# wx_mps = 'wxmps'  # 这里数据库、用户、密码一致(需替换成自己的)
+# wx_mps = 'wxmps'  # 这里数据库、用户、密码一致(需替换成实际的)
 postgres = PostgresUtils.Pgs(host='localhost', port='5432', db_name='wx_mps', user='postgres', password='123456')
 
 formate = '%Y-%m-%d %H:%M:%S'
 
 
 def load():
-    r_pass_ticket = 'wQXzpHwhyJZJ4MWlpSbK7yeSEwoTT6zHnqLwAUFOYLTATRhMxExWgqXN6Mr2cMtT'
+    r_pass_ticket = 'gVuYPYzrFM9U91fip5pgmrb2eRGJYcKQvJhUQ6Qzbna2igTAi4aMyR7cQzqYage%2F'
     'User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.116 Safari/537.36 QBCore/4.0.1278.400 QQBrowser/9.0.2524.400 Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2875.116 Safari/537.36 NetType/WIFI MicroMessenger/7.0.5 WindowsWechat'
     r_mps_biz = 'MzU1NjMwNTUwOQ=='
-    r_app_msg_token = '1052_wZmyLI8g%252FTK9J985y7ddddKjvSMPCUVAVjpaKg~~'
+    r_app_msg_token = '1056_6tj1LwtSzjYHSUy7nqoEblujYB7891hAVoIMgw~~'
 
-    r_cookie = 'wap_sid2=CLmm3/AFElxmbmM4UW44cV9IZ1lwNHZKM3lEZldFRVk4c3BoTTNsM1pNbUlYaTBKclJ6dUs5SmFEN1hfUFdVTV82QzdKb1FNWk5oSmFremROc2VidFdOLVRmN2lXUndFQUFBfjCvsa3zBTgNQJVO'
-    mps = WxMps(r_mps_biz, r_pass_ticket, r_app_msg_token, r_cookie)
-    mps.start()
+    r_cookie = 'wap_sid2=CLmm3/AFElx3blh4X08xdjg2d3cyMXlFdU5BRjhIOTROZ2tFVlZpa3pHd2haLVUwY1hQWG1CMF9tcVZKdXNSQ3h4enJIaGFwbkdsOGpQVjA4OVI2SFRrQkhwWHFKaUFFQUFBfjCD2cD0BTgNQJVO'
+    r_offset = 0
+    sql = 'select msg_id from tb_article'
+    results = postgres.fetch_all(sql)
+    print(results)
+    if results is not None and len(results) > 0:
+        for r in results:
+            last_msg_id = r[0]
+            print('last_msg_id----')
+            print(last_msg_id)
+            mps = WxMps(r_mps_biz, r_pass_ticket, r_app_msg_token, r_cookie, r_offset, last_msg_id)
+            mps.start()
+    else:
+        last_msg_id = 0
+        mps = WxMps(r_mps_biz, r_pass_ticket, r_app_msg_token, r_cookie, r_offset, last_msg_id)
+        mps.start()
 
 
 class WxMps(object):
     """微信公众号文章、评论抓取爬虫"""
 
-    def __init__(self, _biz, _pass_ticket, _app_msg_token, _cookie, _offset=0):
+    def __init__(self, _biz, _pass_ticket, _app_msg_token, _cookie, _offset, last_msg_id):
         'User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.116 Safari/537.36 QBCore/4.0.1278.400 QQBrowser/9.0.2524.400 Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2875.116 Safari/537.36 NetType/WIFI MicroMessenger/7.0.5 WindowsWechat'
 
         self.offset = _offset
+        self.last_msg_id = last_msg_id
         self.biz = _biz  # 公众号标志
         self.msg_token = _app_msg_token  # 票据(非固定)
         self.pass_ticket = _pass_ticket  # 票据(非固定)
@@ -48,7 +65,6 @@ class WxMps(object):
     def start(self):
         """请求获取公众号的文章接口"""
 
-        # start = True
         offset = self.offset
         while True:
             try:
@@ -60,18 +76,19 @@ class WxMps(object):
                 ret, status = resp.get('ret'), resp.get('errmsg')  # 状态信息
 
                 if 0 == ret or 'ok' == status:
-                    # print('Crawl article: ' + api)
 
                     general_msg_list = resp['general_msg_list']
                     msg_list = json.loads(general_msg_list)['list']  # 获取文章列表
                     for msg in msg_list:
                         comm_msg_info = msg['comm_msg_info']  # 该数据是本次推送多篇文章公共的
                         msg_id = comm_msg_info['id']  # 文章id
+                        if msg_id == self.last_msg_id:  # 是上次爬取过的，跳出本循环,接着爬取下一个条目
+                            print('break----------')
+                            break
                         post_time = datetime.fromtimestamp(comm_msg_info['datetime'])  # 发布时间
                         print("post_time0000")
                         print(post_time)
                         msg_type = comm_msg_info['type']  # 文章类型
-                        # msg_data = json.dumps(comm_msg_info, ensure_ascii=False)  # msg原数据
 
                         if 49 == msg_type:
                             # 图文消息
@@ -95,13 +112,6 @@ class WxMps(object):
                             if content:
                                 self._save_text_and_image(msg_id, content,
                                                           msg_type, post_time.strftime(formate))
-                                item_msg_1 = []
-                                item_msg_1.append({"msg_id": msg_id})
-                                item_msg_1.append({"post_time": post_time.strftime(formate)})
-                                item_msg_1.append({"msg_type": msg_type})
-                                item_msg_1.append({"content": content})
-                                print('item_msg_1_text===========文字')
-                                print(item_msg_1)
                         elif 3 == msg_type:
                             # 图片消息
                             image_msg_ext_info = msg.get('image_msg_ext_info')
@@ -109,14 +119,6 @@ class WxMps(object):
                             if cdn_url:
                                 self._save_text_and_image(msg_id, cdn_url,
                                                           msg_type, post_time.strftime(formate))
-                                item_msg_3 = []
-                                item_msg_3.append({"msg_id": msg_id})
-                                item_msg_3.append({"post_time": post_time.strftime('%Y-%m-%d %H:%M:%S')})
-                                item_msg_3.append({"msg_type": msg_type})
-                                item_msg_3.append({"content": cdn_url})
-                                print('item_msg_3_text===========图片')
-                                print(item_msg_3)
-
                 else:
                     break
                 # 0：结束；1：继续
@@ -146,8 +148,6 @@ class WxMps(object):
             js_content = bs.find(id='js_content')
             if js_content:
                 p_list = js_content.find_all('p')
-                # content_list = list(map(lambda p: p.text, filter(lambda p: p.text != '', p_list)))
-                # content = ''.join(content_list)
                 item_list = []
                 content_text_list = []
                 content_img_list = []
@@ -173,12 +173,9 @@ class WxMps(object):
                                 if "“" != content_text:
                                     content_text = content_text + '\n'
                                     content_text_list.append(content_text)
-                # content_text_total = ''.join(content_text_list)
                 item_list.append({'content': content_text_list})  # 添加每篇文章详情页的content
                 item_list.append({'content_img_list': content_img_list})  # 添加每篇文章详情页的img_url
                 item_list.append({'content_video_list': content_video_list})  # 添加每篇文章详情页的video_url
-                print('item_list3-----')
-                print(content_text_list)
                 item_details = json.dumps(item_list, ensure_ascii=False)
                 print('item_details--------')
                 print(item_details)
@@ -197,21 +194,8 @@ class WxMps(object):
 
         content_url = content_url.replace('amp;', '').replace('#wechat_redirect', '').replace('http', 'https')
         details_content = self.crawl_article_content(content_url)
-        # print("type====" + type(details_content))
-        item_msg_49 = []
-        item_msg_49.append({"msg_id": msg_id})
-        item_msg_49.append({"title": title})
-        item_msg_49.append({"author": author})
-        item_msg_49.append({"post_time": post_time})
-        item_msg_49.append({"content_url": content_url})
-        item_msg_49.append({"msg_type": msg_type})
-        item_msg_49.append({"content": details_content})
-        print('item_msg_49_text===========图文')
-        print(item_msg_49)
-        content = ""
-        # article_id = 1
         article_id = postgres.handler(self._save_article(),
-                                      (msg_id, title, post_time, author, content, content_url, msg_type,
+                                      (msg_id, title, post_time, author, content_url, msg_type,
                                        details_content), fetch=True)
         if article_id:
             # json_data = {"articleId": article_id, "author": author, "content": content,
@@ -221,10 +205,6 @@ class WxMps(object):
             # self._save_es(json_data, article_id)
             time.sleep(random.randint(6, 12))
             self._parse_article_detail(content_url, article_id)
-        # self._save_article(msg_id, title, post_time, author, content, content_url, msg_type)
-        # time.sleep(random.randint(5, 12))
-        # article_id = 1
-        # self._parse_article_detail(content_url, article_id)
 
     def _parse_article_detail(self, content_url, article_id):
         """从文章页提取相关参数用于获取评论,article_id是已保存的文章id"""
@@ -269,8 +249,6 @@ class WxMps(object):
             if ret == 0 or status == 'ok':
                 elected_comment = resp['elected_comment']
                 item_msg_comment_list = []
-                # item_msg_comment_list.append({"article_id": article_id})
-                # item_msg_comment_list.append({"comment_id": comment_id})
                 for comment in elected_comment:
                     item_msg_comment = []
                     nick_name = comment.get('nick_name')  # 昵称
@@ -287,9 +265,6 @@ class WxMps(object):
                         reply_content = first_reply.get('content')
                         reply_like_num = first_reply.get('reply_like_num')
                         reply_create_time = datetime.fromtimestamp(first_reply.get('create_time'))
-                    postgres.handler(self._save_article_comment(), (article_id, comment_id, content_id, nick_name,
-                                                                    content, comment_time.strftime(formate),
-                                                                    reply_content))
 
                     item_msg_comment.append({"content_id": content_id})
                     item_msg_comment.append({"nick_name": nick_name})
@@ -304,25 +279,19 @@ class WxMps(object):
 
     @staticmethod
     def _save_only_article():
-        sql = 'insert into tb_article( msg_id, content,msg_type, post_time) ' \
+        sql = 'insert into test_tb_article( msg_id, content,msg_type, post_time) ' \
               'values(%s,%s,%s,%s) returning msg_id'
         return sql
 
     @staticmethod
     def _save_article():
-        sql = 'insert into tb_article(msg_id,title,post_time,author,content,' \
-              'content_url,msg_type,details_content) values(%s,%s,%s,%s,%s,%s,%s,%s) returning msg_id'
-        return sql
-
-    #
-    @staticmethod
-    def _save_article_comment():
-        sql = 'insert into tb_article_comment(article_id, comment_id, content_id,nick_name, content, comment_time, reply_content) values(%s,%s,%s,%s,%s,%s,%s)'
+        sql = 'insert into test_tb_article(msg_id,title,post_time,author,' \
+              'content_url,msg_type,details_content) values(%s,%s,%s,%s,%s,%s,%s) returning msg_id'
         return sql
 
     @staticmethod
     def _save_article_comment1():
-        sql = 'insert into tb_article_comment1(article_id, comment_id,item_msg_comment) values(%s,%s,%s)'
+        sql = 'insert into test_tb_comment(article_id, comment_id,item_msg_comment) values(%s,%s,%s)'
         return sql
 
     # def _save_es(self, json_data, article_id):
@@ -335,11 +304,6 @@ class WxMps(object):
             msg_id, content,
             msg_type, post_time), fetch=True)
 
-        # def _save_text_and_image(self, msg_id, post_time, msg_type, cover=None, digest=None):
-        """保存只是文字或图片消息"""
-        # article_id = postgres.handler(self._save_only_article(), (
-        #     msg_id, cover, digest, post_time, datetime.now(), msg_type), fetch=True)
-
         # if article_id:
         #     json_data = {"articleId": article_id, "cover": cover, "digest": digest,
         #                  "msgId": msg_id, "postTime": post_time, "msgType": msg_type}
@@ -347,5 +311,4 @@ class WxMps(object):
 
 
 if __name__ == '__main__':
-    # # 开始爬取文章及评论
     load()
